@@ -15,6 +15,10 @@ resource "docker_volume" "minio_data" {
   name = "ycproject_minio-data"
 }
 
+resource "docker_volume" "app_db" {
+  name = "ycproject_app-db"
+}
+
 # ========== Networks (VPC) ==========
 
 # Публичная подсеть для балансировщика
@@ -109,7 +113,7 @@ resource "docker_container" "app" {
   env = [
     "DATABASE_URL=${var.database_url}",
     "PORT=7777",
-    "S3_ENDPOINT_URL=http://minio:9000",
+    "S3_ENDPOINT_URL=http://ycproject-minio:9000",
     "S3_PUBLIC_ENDPOINT=http://localhost:9000",
     "S3_BUCKET=${var.s3_bucket}",
     "S3_REGION=${var.s3_region}",
@@ -121,6 +125,11 @@ resource "docker_container" "app" {
 
   networks_advanced {
     name = docker_network.backend.name
+  }
+
+  volumes {
+    volume_name    = docker_volume.app_db.name
+    container_path = "/app/instance"
   }
 
   depends_on = [docker_container.minio]

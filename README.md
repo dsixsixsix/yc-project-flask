@@ -27,13 +27,13 @@ app/
 
 ## Развертывание через Terraform
 
-Вся инфраструктура описана Terraform-спецификацией в папке `terraform/`.
+Вся инфраструктура описана Terraform-спецификацией в папке `terraform/`. Это единственный способ развертывания проекта, соответствующий требованиям.
 
 ### Требования:
 - Terraform (установи с https://www.terraform.io/downloads)
 - Docker Desktop (для Docker provider)
 
-### Быстрый старт с Terraform:
+### Быстрый старт:
 
 ```bash
 cd terraform
@@ -46,86 +46,45 @@ terraform plan
 
 # Развертывание инфраструктуры
 terraform apply
-
-# После развертывания создай тестовых пользователей
-curl -X POST http://localhost:8080/init-test-users
-
-# Удаление инфраструктуры
-terraform destroy
 ```
 
-Terraform создаст:
+После развертывания Terraform создаст:
 - 3 виртуальные сети (VPC): frontend, backend, storage
-- Docker volumes для данных MinIO
+- Docker volumes для данных MinIO и базы данных
 - 3 контейнера: nginx (балансировщик), app (Flask), minio (Object Storage)
 - Все зависимости и сетевые подключения
 
-### Альтернатива: Docker Compose
+### Первый запуск - создание тестовых пользователей
 
-Если предпочитаешь Docker Compose, используй инструкции ниже.
-
-## Подготовка (для локального запуска без Docker)
-1) Скопируй пример переменных:
+После развертывания создай тестовых пользователей:
 ```bash
-cp env.example .env
-```
-2) Установи зависимости (желательно в venv):
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-```
-3) Подними S3-совместимое хранилище. Для локального теста удобно MinIO:
-
-**Вариант A: Через Docker (если установлен Docker Desktop)**
-- Сначала запусти Docker Desktop приложение
-- Затем выполни:
-```bash
-docker run -p 9000:9000 -p 9001:9001 \
-  -e MINIO_ROOT_USER=minioadmin \
-  -e MINIO_ROOT_PASSWORD=minioadmin \
-  quay.io/minio/minio server /data --console-address ":9001"
+curl -X POST http://localhost:8080/init-test-users
 ```
 
-**Вариант B: Установка MinIO без Docker (macOS)**
-```bash
-# Установка через Homebrew
-brew install minio/stable/minio
+Это создаст 3 пользователя:
+- **admin** / **admin123** — полный доступ (создание, чтение, обновление, удаление)
+- **user** / **user123** — может создавать и обновлять свои элементы
+- **guest** / **guest123** — только чтение (без авторизации)
 
-# Запуск MinIO
-minio server ~/minio-data --console-address ":9001"
-```
-При первом запуске MinIO покажет логин и пароль (по умолчанию `minioadmin` / `minioadmin`).
+### Настройка MinIO
 
-**После запуска MinIO:**
-- Открой веб-консоль: `http://localhost:9001`
-- Войди с учетными данными (по умолчанию `minioadmin` / `minioadmin`)
-- Создай bucket `demo-bucket` через веб-интерфейс
+После запуска контейнеров:
+1. Открой веб-консоль MinIO: `http://localhost:9001`
+2. Войди с учетными данными (по умолчанию `minioadmin` / `minioadmin`)
+3. Создай bucket `demo-bucket` через веб-интерфейс
 
-## Запуск
-```bash
-flask --app app run --debug
-```
-Приложение автоматически создаст таблицу `items` в SQLite.
+### Доступ к приложению
 
-### Запуск через Docker Compose (альтернатива Terraform)
+- **Веб-интерфейс:** `http://localhost:8080/`
+- **MinIO API:** `http://localhost:9000`
+- **MinIO Консоль:** `http://localhost:9001`
 
-**Примечание:** Для production рекомендуется использовать Terraform (см. выше).
-
-Локальный аналог варианта с балансировщиком нагрузки:
+### Удаление инфраструктуры
 
 ```bash
-docker compose up --build
+cd terraform
+terraform destroy
 ```
-
-Что поднимается:
-- `app` — контейнер с Flask-приложением на порту `7777` (внутри сети Docker).
-- `minio` — Object Storage, доступен с хоста:
-  - API: `http://localhost:9000`
-  - Консоль: `http://localhost:9001`
-- `nginx` — балансировщик/реверс-прокси:
-  - Принимает HTTP на `http://localhost:8080`
-  - Проксирует трафик на сервис `app:7777`
 
 ### Виртуальные сети (VPC)
 
@@ -141,22 +100,6 @@ docker compose up --build
 - `minio` подключён к `backend-network` и `storage-network` (доступен из backend, но изолирован в storage-подсети)
 
 Это обеспечивает сетевую изоляцию и безопасность, аналогично VPC в Yandex Cloud.
-
-Таким образом, для проверки CRUD через браузер в docker-режиме используй:
-- UI: `http://localhost:8080/`
-- MinIO-консоль: `http://localhost:9001`
-
-### Первый запуск - создание тестовых пользователей
-
-После первого запуска создай тестовых пользователей:
-```bash
-curl -X POST http://localhost:8080/init-test-users
-```
-
-Это создаст 3 пользователя:
-- **admin** / **admin123** — полный доступ (создание, чтение, обновление, удаление)
-- **user** / **user123** — может создавать и обновлять свои элементы
-- **guest** / **guest123** — только чтение (без авторизации)
 
 ### Использование веб-интерфейса
 
@@ -184,9 +127,11 @@ curl -X POST http://localhost:8080/init-test-users
 - `POST /init-test-users` — создание тестовых пользователей (admin, user, guest)
 
 ### Быстрый старт:
-1. Создай тестовых пользователей: `curl -X POST http://localhost:8080/init-test-users`
-2. Открой веб-интерфейс: `http://localhost:8080/`
-3. Войди с одним из пользователей:
+1. Разверни инфраструктуру через Terraform (см. раздел "Развертывание через Terraform")
+2. Создай тестовых пользователей: `curl -X POST http://localhost:8080/init-test-users`
+3. Создай bucket `demo-bucket` в MinIO через консоль `http://localhost:9001`
+4. Открой веб-интерфейс: `http://localhost:8080/`
+5. Войди с одним из пользователей:
    - **admin** / **admin123** — полный доступ
    - **user** / **user123** — создание и управление своими элементами
    - **guest** / **guest123** — только чтение
@@ -203,9 +148,10 @@ curl -X POST http://localhost:8080/init-test-users
 - `PUT/PATCH /items/<id>` — обновить (user может только свои, admin — все)
 - `DELETE /items/<id>` — удалить (только admin)
 
-Пример запроса на создание с файлом:
+Пример запроса на создание с файлом (требует токен):
 ```bash
-curl -X POST http://localhost:5000/items \
+curl -X POST http://localhost:8080/items \
+  -H "Authorization: Bearer <your-jwt-token>" \
   -F "name=Test item" \
   -F "description=hello" \
   -F "file=@/path/to/local/file.png"

@@ -82,12 +82,37 @@ curl -X POST http://localhost:8080/init-test-users
 - **MinIO API:** `http://localhost:9000`
 - **MinIO Консоль:** `http://localhost:9001`
 
-### Удаление инфраструктуры
+### Остановка и удаление инфраструктуры
 
+**Вариант 1: Полное удаление (удалит всё, включая данные в volumes)**
 ```bash
 cd terraform
 terraform destroy
+# Введите 'yes' для подтверждения
 ```
+
+**Вариант 2: Остановка контейнеров без удаления (данные сохранятся)**
+```bash
+# Остановить контейнеры
+docker stop ycproject-nginx ycproject-app ycproject-minio
+
+# Запустить снова
+docker start ycproject-minio ycproject-app ycproject-nginx
+```
+
+**Вариант 3: Удалить только контейнеры, сохранив volumes (данные останутся)**
+```bash
+cd terraform
+# Удалить только контейнеры
+terraform destroy -target=docker_container.nginx -target=docker_container.app -target=docker_container.minio
+
+# Volumes и сети останутся, можно будет пересоздать контейнеры:
+terraform apply
+```
+
+**Примечание:** 
+- `terraform destroy` удалит **всё**: контейнеры, сети, volumes (включая данные БД и MinIO)
+- Если нужно сохранить данные, используйте Вариант 2 или 3
 
 ### Виртуальные сети (VPC)
 

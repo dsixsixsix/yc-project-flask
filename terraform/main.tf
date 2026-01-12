@@ -46,12 +46,11 @@ resource "docker_network" "storage" {
 
 # ========== Images ==========
 
+# Используем локальный образ (собранный заранее)
+# Если образ не существует, соберите его: docker build -t ycproject-app:latest ..
 resource "docker_image" "app" {
   name = "ycproject-app:latest"
-  build {
-    context = ".."
-    dockerfile = "Dockerfile"
-  }
+  keep_locally = true
 }
 
 resource "docker_image" "nginx" {

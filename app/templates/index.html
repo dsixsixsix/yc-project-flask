@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <title>Items CRUD - Role-Based Access</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { 
+      font-family: Arial, sans-serif; 
+      margin: 0;
+      padding: 24px;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      min-height: 100vh;
+      background-color: #f5f5f5;
+    }
+    .container {
+      width: 100%;
+      max-width: 1000px;
+      background: white;
+      padding: 24px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    h1 {
+      text-align: center;
+      margin-top: 0;
+      color: #333;
+    }
+    .auth-section { 
+      margin-bottom: 20px; 
+      padding: 16px; 
+      border: 2px solid #4CAF50; 
+      border-radius: 6px; 
+      background: #f0f8f0; 
+    }
+    .user-info { 
+      margin-bottom: 16px; 
+      padding: 12px; 
+      background: #e3f2fd; 
+      border-radius: 6px; 
+    }
+    .role-badge { 
+      display: inline-block; 
+      padding: 4px 8px; 
+      border-radius: 4px; 
+      font-weight: bold; 
+      margin-left: 8px; 
+    }
+    .role-admin { background: #f44336; color: white; }
+    .role-user { background: #2196F3; color: white; }
+    .role-guest { background: #9E9E9E; color: white; }
+    form { 
+      margin-bottom: 16px; 
+      padding: 12px; 
+      border: 1px solid #ddd; 
+      border-radius: 6px; 
+    }
+    input, textarea { 
+      width: 100%; 
+      margin: 4px 0 8px; 
+      padding: 6px; 
+      box-sizing: border-box; 
+    }
+    table { 
+      width: 100%; 
+      border-collapse: collapse; 
+      margin-top: 12px; 
+    }
+    th, td { 
+      border: 1px solid #ddd; 
+      padding: 8px; 
+      text-align: left; 
+    }
+    th { background: #f6f6f6; }
+    button { 
+      padding: 6px 10px; 
+      margin-right: 4px; 
+      cursor: pointer; 
+    }
+    .actions { white-space: nowrap; }
+    .hidden { display: none; }
+    .error { color: red; margin-top: 8px; }
+    .success { color: green; margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Items CRUD - Role-Based Access Control</h1>
+
+  <!-- Форма авторизации -->
+  <div id="loginSection" class="auth-section">
+    <h2>Авторизация</h2>
+    <form id="loginForm">
+      <label>Имя пользователя:</label>
+      <input type="text" name="username" required />
+      <label>Пароль:</label>
+      <input type="password" name="password" required />
+      <button type="submit">Войти</button>
+    </form>
+    <div id="loginError" class="error hidden"></div>
+    <p><small>Тестовые пользователи: логин: admin пароль: admin123, логин: user пароль: user123, логин: guest пароль: guest123</small></p>
+  </div>
+
+  <!-- Информация о пользователе -->
+  <div id="userSection" class="user-info hidden">
+    <strong>Пользователь:</strong> <span id="username"></span>
+    <span id="roleBadge" class="role-badge"></span>
+    <button onclick="logout()" style="float: right;">Выйти</button>
+    <div><small>Права: <span id="permissions"></span></small></div>
+  </div>
+
+  <!-- Основной интерфейс (только для авторизованных) -->
+  <div id="mainSection" class="hidden">
+    <!-- Форма создания (только для user и admin) -->
+    <form id="createForm" class="hidden">
+      <h3>Создать Item</h3>
+      <label>Имя</label>
+      <input name="name" required />
+      <label>Описание</label>
+      <textarea name="description"></textarea>
+      <label>Файл (опционально)</label>
+      <input type="file" name="file" />
+      <button type="submit">Создать</button>
+    </form>
+
+    <table id="itemsTable">
+      <thead>
+        <tr><th>ID</th><th>Name</th><th>Description</th><th>File URL</th><th>Created By</th><th class="actions">Actions</th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <script>
+    let currentUser = null;
+    let currentToken = null;
+
+    // Загружаем токен из localStorage при загрузке страницы
+    window.addEventListener('DOMContentLoaded', () => {
+      const savedToken = localStorage.getItem('token');
+      if (savedToken) {
+        currentToken = savedToken;
+        checkAuth();
+      }
+    });
+
+    // API с авторизацией
+    const api = async (path, options = {}) => {
+      const headers = { ...options.headers };
+      if (currentToken) {
+        headers['Authorization'] = `Bearer ${currentToken}`;
+      }
+      const res = await fetch(path, { ...options, headers });
+      if (!res.ok) {
+        const error = await res.text();
+        throw new Error(error || res.statusText);
+      }
+      return res.json();
+    };
+
+    // Проверка авторизации
+    async function checkAuth() {
+      try {
+        const data = await api('/iam/user');
+        currentUser = data.user;
+        showMainInterface(data);
+      } catch (err) {
+        currentToken = null;
+        localStorage.removeItem('token');
+        showLoginForm();
+      }
+    }
+
+    // Показать форму логина
+    function showLoginForm() {
+      document.getElementById('loginSection').classList.remove('hidden');
+      document.getElementById('userSection').classList.add('hidden');
+      document.getElementById('mainSection').classList.add('hidden');
+    }
+
+    // Показать основной интерфейс
+    function showMainInterface(iamData) {
+      document.getElementById('loginSection').classList.add('hidden');
+      document.getElementById('userSection').classList.remove('hidden');
+      document.getElementById('mainSection').classList.remove('hidden');
+
+      const user = iamData.user;
+      const role = iamData.role;
+      const perms = iamData.permissions;
+
+      document.getElementById('username').textContent = user.username;
+      const roleBadge = document.getElementById('roleBadge');
+      roleBadge.textContent = role.toUpperCase();
+      roleBadge.className = 'role-badge role-' + role;
+
+      const permsText = [];
+      if (perms.can_create) permsText.push('Создание');
+      if (perms.can_read) permsText.push('Чтение');
+      if (perms.can_update) permsText.push('Обновление');
+      if (perms.can_delete) permsText.push('Удаление');
+      document.getElementById('permissions').textContent = permsText.join(', ');
+
+      // Показываем форму создания только для user и admin
+      if (perms.can_create) {
+        document.getElementById('createForm').classList.remove('hidden');
+      } else {
+        document.getElementById('createForm').classList.add('hidden');
+      }
+
+      loadItems();
+    }
+
+    // Выход
+    function logout() {
+      currentToken = null;
+      currentUser = null;
+      localStorage.removeItem('token');
+      showLoginForm();
+    }
+
+    // Логин
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const form = e.target;
+      const formData = new FormData(form);
+      const data = {
+        username: formData.get('username'),
+        password: formData.get('password')
+      };
+
+      try {
+        const response = await fetch('/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || 'Ошибка авторизации');
+        }
+
+        const result = await response.json();
+        currentToken = result.token;
+        localStorage.setItem('token', currentToken);
+        document.getElementById('loginError').classList.add('hidden');
+        await checkAuth();
+      } catch (err) {
+        const errorDiv = document.getElementById('loginError');
+        errorDiv.textContent = err.message;
+        errorDiv.classList.remove('hidden');
+      }
+    });
+
+    // Загрузка элементов
+    async function loadItems() {
+      try {
+        const items = await api('/items');
+        const tbody = document.querySelector('#itemsTable tbody');
+        tbody.innerHTML = '';
+        items.forEach(item => {
+          const tr = document.createElement('tr');
+          const canUpdate = currentUser && (currentUser.role === 'admin' || (currentUser.role === 'user' && item.created_by === currentUser.id));
+          const canDelete = currentUser && currentUser.role === 'admin';
+          
+          tr.innerHTML = `
+            <td>${item.id}</td>
+            <td>${item.name}</td>
+            <td>${item.description || ''}</td>
+            <td>${item.file_url ? '<a href="' + item.file_url + '" target="_blank">link</a>' : ''}</td>
+            <td>${item.created_by || '-'}</td>
+            <td class="actions">
+              ${canUpdate ? `<button data-action="edit" data-id="${item.id}">Edit</button>` : ''}
+              ${canDelete ? `<button data-action="delete" data-id="${item.id}">Delete</button>` : ''}
+              ${!canUpdate && !canDelete ? '<span style="color: #999;">Нет прав</span>' : ''}
+            </td>
+          `;
+          tbody.appendChild(tr);
+        });
+      } catch (err) {
+        console.error('Load items error:', err);
+      }
+    }
+
+    // Создание элемента
+    document.getElementById('createForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const form = e.target;
+      const formData = new FormData(form);
+      try {
+        await api('/items', { method: 'POST', body: formData });
+        form.reset();
+        await loadItems();
+      } catch (err) {
+        alert('Create error: ' + err.message);
+      }
+    });
+
+    // Обработка действий (Edit/Delete)
+    document.querySelector('#itemsTable').addEventListener('click', async (e) => {
+      if (e.target.tagName !== 'BUTTON') return;
+      const action = e.target.dataset.action;
+      const id = e.target.dataset.id;
+      
+      if (action === 'delete') {
+        if (!confirm('Удалить item #' + id + '?')) return;
+        try {
+          await api('/items/' + id, { method: 'DELETE' });
+          await loadItems();
+        } catch (err) {
+          alert('Delete error: ' + err.message);
+        }
+      }
+      
+      if (action === 'edit') {
+        const name = prompt('Новое имя?');
+        if (name === null) return;
+        const description = prompt('Новое описание? (пусто чтобы очистить)');
+        const data = new FormData();
+        data.append('name', name);
+        data.append('description', description || '');
+        try {
+          await api('/items/' + id, { method: 'PATCH', body: data });
+          await loadItems();
+        } catch (err) {
+          alert('Update error: ' + err.message);
+        }
+      }
+    });
+  </script>
+  </div>
+</body>
+</html>

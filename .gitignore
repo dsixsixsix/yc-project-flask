@@ -36,3 +36,4 @@ Thumbs.db
 
 # MinIO data (если хранишь локально)
 minio-data/
+app_old.py.backup

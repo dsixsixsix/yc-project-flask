@@ -1,0 +1,11 @@
+# Пример файла переменных для Terraform
+# Скопируй этот файл в terraform.tfvars и измени значения при необходимости
+
+database_url = "sqlite:///app.db"
+s3_bucket    = "demo-bucket"
+s3_region    = "us-east-1"
+
+# Минимальные значения для разработки (измени в продакшене!)
+minio_root_user     = "minioadmin"
+minio_root_password = "minioadmin"
+secret_key          = "dev-secret-key-change-in-production"
